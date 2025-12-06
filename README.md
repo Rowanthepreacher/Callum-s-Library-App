@@ -9,7 +9,10 @@ A desktop application for managing a personal library of books and comics with l
 - **Cover Images**: Download and display book covers
 - **Lending System**: Track who has borrowed books and when they're due back
 - **Overdue Warnings**: Separate tab for books on loan longer than 30 days
-- **Search Functionality**: Quickly find books by title, author, or ISBN
+- **Quick Search**: Find books instantly by title, author, or ISBN
+- **Advanced Search**: Dedicated search tab with multiple criteria (ISBN, Title, Series, Author, Publisher)
+- **Flexible Searching**: Case-insensitive with partial matching (typo-tolerant)
+- **Alphabetical Sorting**: All book lists automatically sorted by title
 - **Fully Editable**: All fields can be manually edited even after API lookup
 
 ## Layout

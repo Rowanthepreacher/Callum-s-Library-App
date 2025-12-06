@@ -117,7 +117,7 @@ def get_all_books():
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    cursor.execute("SELECT * FROM books ORDER BY title")
+    cursor.execute("SELECT * FROM books ORDER BY title COLLATE NOCASE")
     books = [dict(row) for row in cursor.fetchall()]
     conn.close()
     
@@ -125,7 +125,7 @@ def get_all_books():
 
 
 def search_books(query):
-    """Search books by title, author, or ISBN"""
+    """Search books by title, author, or ISBN (quick search)"""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -134,8 +134,52 @@ def search_books(query):
     cursor.execute("""
         SELECT * FROM books 
         WHERE title LIKE ? OR author LIKE ? OR isbn LIKE ?
-        ORDER BY title
+        ORDER BY title COLLATE NOCASE
     """, (search_pattern, search_pattern, search_pattern))
+    
+    books = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    return books
+
+
+def advanced_search(isbn=None, title=None, series=None, author=None, publisher=None):
+    """Advanced search with multiple criteria (case-insensitive, partial matching)"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # Build query dynamically based on provided criteria
+    conditions = []
+    params = []
+    
+    if isbn:
+        conditions.append("isbn LIKE ?")
+        params.append(f"%{isbn}%")
+    
+    if title:
+        conditions.append("title LIKE ?")
+        params.append(f"%{title}%")
+    
+    if series:
+        conditions.append("series_name LIKE ?")
+        params.append(f"%{series}%")
+    
+    if author:
+        conditions.append("author LIKE ?")
+        params.append(f"%{author}%")
+    
+    if publisher:
+        conditions.append("publisher LIKE ?")
+        params.append(f"%{publisher}%")
+    
+    # If no criteria provided, return all books
+    if not conditions:
+        cursor.execute("SELECT * FROM books ORDER BY title COLLATE NOCASE")
+    else:
+        where_clause = " AND ".join(conditions)
+        query = f"SELECT * FROM books WHERE {where_clause} ORDER BY title COLLATE NOCASE"
+        cursor.execute(query, params)
     
     books = [dict(row) for row in cursor.fetchall()]
     conn.close()

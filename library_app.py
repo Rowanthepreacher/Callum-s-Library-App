@@ -30,6 +30,7 @@ class LibraryApp:
         
         # Create tabs
         self.create_library_tab()
+        self.create_search_tab()
         self.create_loans_tab()
         self.create_overdue_tab()
         
@@ -168,6 +169,110 @@ class LibraryApp:
         
         self.book_list.bind('<<ListboxSelect>>', self.on_book_selected)
     
+    def create_search_tab(self):
+        """Dedicated search tab with multiple criteria"""
+        search_frame = ttk.Frame(self.notebook)
+        self.notebook.add(search_frame, text='Search')
+        
+        # Search criteria frame
+        criteria_frame = ttk.LabelFrame(search_frame, text="Search Criteria", padding=10)
+        criteria_frame.pack(fill='x', padx=10, pady=10)
+        
+        # ISBN search
+        isbn_row = ttk.Frame(criteria_frame)
+        isbn_row.pack(fill='x', pady=5)
+        ttk.Label(isbn_row, text="ISBN:", width=12).pack(side='left')
+        self.search_isbn_entry = ttk.Entry(isbn_row)
+        self.search_isbn_entry.pack(side='left', fill='x', expand=True, padx=5)
+        
+        # Title search
+        title_row = ttk.Frame(criteria_frame)
+        title_row.pack(fill='x', pady=5)
+        ttk.Label(title_row, text="Title:", width=12).pack(side='left')
+        self.search_title_entry = ttk.Entry(title_row)
+        self.search_title_entry.pack(side='left', fill='x', expand=True, padx=5)
+        
+        # Series search
+        series_row = ttk.Frame(criteria_frame)
+        series_row.pack(fill='x', pady=5)
+        ttk.Label(series_row, text="Series:", width=12).pack(side='left')
+        self.search_series_entry = ttk.Entry(series_row)
+        self.search_series_entry.pack(side='left', fill='x', expand=True, padx=5)
+        
+        # Author search
+        author_row = ttk.Frame(criteria_frame)
+        author_row.pack(fill='x', pady=5)
+        ttk.Label(author_row, text="Author:", width=12).pack(side='left')
+        self.search_author_entry = ttk.Entry(author_row)
+        self.search_author_entry.pack(side='left', fill='x', expand=True, padx=5)
+        
+        # Publisher search
+        publisher_row = ttk.Frame(criteria_frame)
+        publisher_row.pack(fill='x', pady=5)
+        ttk.Label(publisher_row, text="Publisher:", width=12).pack(side='left')
+        self.search_publisher_entry = ttk.Entry(publisher_row)
+        self.search_publisher_entry.pack(side='left', fill='x', expand=True, padx=5)
+        
+        # Search buttons
+        button_row = ttk.Frame(criteria_frame)
+        button_row.pack(fill='x', pady=10)
+        ttk.Button(button_row, text="Search", command=self.do_advanced_search).pack(side='left', padx=5)
+        ttk.Button(button_row, text="Clear Criteria", command=self.clear_search_criteria).pack(side='left', padx=5)
+        ttk.Button(button_row, text="Show All Books", command=self.show_all_in_search).pack(side='left', padx=5)
+        
+        # Results info
+        self.search_results_label = ttk.Label(search_frame, text="Enter search criteria and click Search")
+        self.search_results_label.pack(pady=5)
+        
+        # Results treeview
+        results_frame = ttk.Frame(search_frame)
+        results_frame.pack(fill='both', expand=True, padx=10, pady=(0, 10))
+        
+        # Scrollbars
+        v_scroll = ttk.Scrollbar(results_frame, orient='vertical')
+        v_scroll.pack(side='right', fill='y')
+        
+        h_scroll = ttk.Scrollbar(results_frame, orient='horizontal')
+        h_scroll.pack(side='bottom', fill='x')
+        
+        # Treeview
+        columns = ('Title', 'Author', 'Series', 'Publisher', 'Year')
+        self.search_results_tree = ttk.Treeview(results_frame, columns=columns, show='tree headings',
+                                                yscrollcommand=v_scroll.set,
+                                                xscrollcommand=h_scroll.set)
+        
+        v_scroll.config(command=self.search_results_tree.yview)
+        h_scroll.config(command=self.search_results_tree.xview)
+        
+        self.search_results_tree.heading('#0', text='ID')
+        self.search_results_tree.column('#0', width=50)
+        
+        self.search_results_tree.heading('Title', text='Title')
+        self.search_results_tree.column('Title', width=250)
+        
+        self.search_results_tree.heading('Author', text='Author')
+        self.search_results_tree.column('Author', width=150)
+        
+        self.search_results_tree.heading('Series', text='Series')
+        self.search_results_tree.column('Series', width=150)
+        
+        self.search_results_tree.heading('Publisher', text='Publisher')
+        self.search_results_tree.column('Publisher', width=150)
+        
+        self.search_results_tree.heading('Year', text='Year')
+        self.search_results_tree.column('Year', width=60)
+        
+        self.search_results_tree.pack(side='left', fill='both', expand=True)
+        
+        # Bind double-click to load book
+        self.search_results_tree.bind('<Double-Button-1>', self.load_book_from_search)
+        
+        # Button to load selected book
+        load_button_frame = ttk.Frame(search_frame)
+        load_button_frame.pack(fill='x', padx=10, pady=(0, 10))
+        ttk.Button(load_button_frame, text="View Selected Book", 
+                  command=self.view_book_from_search).pack(side='left', padx=5)
+    
     def create_loans_tab(self):
         """Tab for viewing all active loans"""
         loans_frame = ttk.Frame(self.notebook)
@@ -243,6 +348,11 @@ class LibraryApp:
         if not isbn:
             messagebox.showwarning("No ISBN", "Please enter an ISBN")
             return
+        
+        # Clear all fields first (including cover)
+        self.clear_form()
+        # Put the ISBN back
+        self.isbn_entry.insert(0, isbn)
         
         # Show loading message
         self.root.config(cursor="wait")
@@ -632,6 +742,104 @@ class LibraryApp:
             self.refresh_overdue_list()
         except Exception as e:
             messagebox.showerror("Error", f"Failed to return book: {e}")
+    
+    def do_advanced_search(self):
+        """Perform advanced search with multiple criteria"""
+        # Get search criteria
+        isbn = self.search_isbn_entry.get().strip()
+        title = self.search_title_entry.get().strip()
+        series = self.search_series_entry.get().strip()
+        author = self.search_author_entry.get().strip()
+        publisher = self.search_publisher_entry.get().strip()
+        
+        # Check if at least one criterion is provided
+        if not any([isbn, title, series, author, publisher]):
+            messagebox.showinfo("No Criteria", "Please enter at least one search criterion")
+            return
+        
+        # Perform search
+        results = database.advanced_search(isbn=isbn or None, 
+                                          title=title or None,
+                                          series=series or None, 
+                                          author=author or None, 
+                                          publisher=publisher or None)
+        
+        # Display results
+        self.display_search_results(results)
+    
+    def clear_search_criteria(self):
+        """Clear all search criteria fields"""
+        self.search_isbn_entry.delete(0, 'end')
+        self.search_title_entry.delete(0, 'end')
+        self.search_series_entry.delete(0, 'end')
+        self.search_author_entry.delete(0, 'end')
+        self.search_publisher_entry.delete(0, 'end')
+        
+        # Clear results
+        for item in self.search_results_tree.get_children():
+            self.search_results_tree.delete(item)
+        
+        self.search_results_label.config(text="Enter search criteria and click Search")
+    
+    def show_all_in_search(self):
+        """Show all books in search results"""
+        results = database.get_all_books()
+        self.display_search_results(results)
+    
+    def display_search_results(self, results):
+        """Display search results in the treeview"""
+        # Clear existing results
+        for item in self.search_results_tree.get_children():
+            self.search_results_tree.delete(item)
+        
+        # Add new results
+        for book in results:
+            series_info = ''
+            if book['series_name']:
+                series_info = book['series_name']
+                if book['series_number']:
+                    series_info += f" #{book['series_number']}"
+            
+            self.search_results_tree.insert('', 'end', text=str(book['id']),
+                                           values=(book['title'] or '',
+                                                  book['author'] or '',
+                                                  series_info,
+                                                  book['publisher'] or '',
+                                                  book['year'] or ''))
+        
+        # Update label
+        count = len(results)
+        if count == 0:
+            self.search_results_label.config(text="No books found matching criteria")
+        elif count == 1:
+            self.search_results_label.config(text="Found 1 book")
+        else:
+            self.search_results_label.config(text=f"Found {count} books")
+    
+    def load_book_from_search(self, event):
+        """Load book when double-clicked in search results"""
+        selection = self.search_results_tree.selection()
+        if not selection:
+            return
+        
+        book_id = int(self.search_results_tree.item(selection[0])['text'])
+        self.load_book(book_id)
+        
+        # Switch to Library tab to show the loaded book
+        self.notebook.select(0)
+    
+    def view_book_from_search(self):
+        """Load selected book from search results via button"""
+        selection = self.search_results_tree.selection()
+        if not selection:
+            messagebox.showwarning("No Selection", "Please select a book to view")
+            return
+        
+        book_id = int(self.search_results_tree.item(selection[0])['text'])
+        self.load_book(book_id)
+        
+        # Switch to Library tab to show the loaded book
+        self.notebook.select(0)
 
 
 def main():

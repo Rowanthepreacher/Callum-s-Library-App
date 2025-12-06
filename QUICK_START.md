@@ -89,9 +89,24 @@ The **"⚠ Overdue"** tab shows:
 
 ### Searching Your Library
 
+**Quick Search (Library Tab):**
 - Use the search box at the bottom of the Library tab
 - Searches: Title, Author, and ISBN
 - Updates as you type
+
+**Advanced Search (Search Tab):**
+- Go to the "Search" tab for more powerful searching
+- Search by any combination of:
+  - ISBN
+  - Title
+  - Series name
+  - Author
+  - Publisher
+- Case-insensitive and typo-tolerant (partial matches work)
+- Example: Searching "potter" in Title will find "Harry Potter"
+- Click "Show All Books" to see your entire library
+- Double-click any result to view the book details
+- Results are always alphabetised by title
 
 ### Editing Book Details
 
