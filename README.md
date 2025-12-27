@@ -10,8 +10,9 @@ A desktop application for managing a personal library of books and comics with l
 - **Lending System**: Track who has borrowed books and when they're due back
 - **Overdue Warnings**: Separate tab for books on loan longer than 30 days
 - **Quick Search**: Find books instantly by title, author, or ISBN
-- **Advanced Search**: Dedicated search tab with multiple criteria (ISBN, Title, Series, Author, Publisher)
+- **Advanced Search**: Dedicated search tab with multiple criteria (ISBN, Title, Series, Author, Artist, Publisher)
 - **Flexible Searching**: Case-insensitive with partial matching (typo-tolerant)
+- **Manual Cover Upload**: Upload custom cover images for any book
 - **Alphabetical Sorting**: All book lists automatically sorted by title
 - **Fully Editable**: All fields can be manually edited even after API lookup
 
@@ -21,12 +22,14 @@ A desktop application for managing a personal library of books and comics with l
 - Title with year
 - Series information (name and number)
 - Author
+- Artist (for comics/graphic novels)
 - Publisher
 - Format and page count
 - Personal notes
 
 **Right Panel:**
 - Cover image preview
+- Manual cover upload button
 - Scrollable book description
 
 **Bottom:**
@@ -107,4 +110,6 @@ Books on loan for more than 30 days automatically appear in the "⚠ Overdue" ta
 - All book fields are editable even after auto-fill from ISBN lookup
 - ISBN field is optional (books can be added manually without ISBN)
 - Series information must be entered manually as it's not reliably available from the API
-- Cover images are downloaded once and stored locally
+- Artist field must be entered manually (ISBN lookup provides authors only)
+- Cover images are downloaded once and stored locally, or can be uploaded manually
+- All notifications are silent (no system beeps)

@@ -4,11 +4,126 @@ Main GUI Application
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+from tkinter import ttk, scrolledtext, filedialog
 from PIL import Image, ImageTk
 from pathlib import Path
+import shutil
 import database
 import isbn_lookup
+
+
+class SilentDialog:
+    """Custom dialog boxes that don't make system beeps"""
+    
+    @staticmethod
+    def showinfo(title, message, parent=None):
+        """Show info dialog without beep"""
+        dialog = tk.Toplevel(parent) if parent else tk.Toplevel()
+        dialog.title(title)
+        dialog.geometry("400x150")
+        dialog.resizable(False, False)
+        if parent:
+            dialog.transient(parent)
+            dialog.grab_set()
+        
+        # Centre on parent
+        if parent:
+            dialog.update_idletasks()
+            x = parent.winfo_x() + (parent.winfo_width() // 2) - (dialog.winfo_width() // 2)
+            y = parent.winfo_y() + (parent.winfo_height() // 2) - (dialog.winfo_height() // 2)
+            dialog.geometry(f"+{x}+{y}")
+        
+        ttk.Label(dialog, text=message, wraplength=350, justify='left').pack(pady=20, padx=20)
+        ttk.Button(dialog, text="OK", command=dialog.destroy, width=10).pack(pady=10)
+        
+        dialog.focus_set()
+        dialog.wait_window()
+    
+    @staticmethod
+    def showwarning(title, message, parent=None):
+        """Show warning dialog without beep"""
+        dialog = tk.Toplevel(parent) if parent else tk.Toplevel()
+        dialog.title(title)
+        dialog.geometry("400x150")
+        dialog.resizable(False, False)
+        if parent:
+            dialog.transient(parent)
+            dialog.grab_set()
+        
+        if parent:
+            dialog.update_idletasks()
+            x = parent.winfo_x() + (parent.winfo_width() // 2) - (dialog.winfo_width() // 2)
+            y = parent.winfo_y() + (parent.winfo_height() // 2) - (dialog.winfo_height() // 2)
+            dialog.geometry(f"+{x}+{y}")
+        
+        ttk.Label(dialog, text=message, wraplength=350, justify='left').pack(pady=20, padx=20)
+        ttk.Button(dialog, text="OK", command=dialog.destroy, width=10).pack(pady=10)
+        
+        dialog.focus_set()
+        dialog.wait_window()
+    
+    @staticmethod
+    def showerror(title, message, parent=None):
+        """Show error dialog without beep"""
+        dialog = tk.Toplevel(parent) if parent else tk.Toplevel()
+        dialog.title(title)
+        dialog.geometry("400x150")
+        dialog.resizable(False, False)
+        if parent:
+            dialog.transient(parent)
+            dialog.grab_set()
+        
+        if parent:
+            dialog.update_idletasks()
+            x = parent.winfo_x() + (parent.winfo_width() // 2) - (dialog.winfo_width() // 2)
+            y = parent.winfo_y() + (parent.winfo_height() // 2) - (dialog.winfo_height() // 2)
+            dialog.geometry(f"+{x}+{y}")
+        
+        ttk.Label(dialog, text=message, wraplength=350, justify='left', foreground='red').pack(pady=20, padx=20)
+        ttk.Button(dialog, text="OK", command=dialog.destroy, width=10).pack(pady=10)
+        
+        dialog.focus_set()
+        dialog.wait_window()
+    
+    @staticmethod
+    def askyesno(title, message, parent=None):
+        """Show yes/no dialog without beep"""
+        dialog = tk.Toplevel(parent) if parent else tk.Toplevel()
+        dialog.title(title)
+        dialog.geometry("400x150")
+        dialog.resizable(False, False)
+        if parent:
+            dialog.transient(parent)
+            dialog.grab_set()
+        
+        if parent:
+            dialog.update_idletasks()
+            x = parent.winfo_x() + (parent.winfo_width() // 2) - (dialog.winfo_width() // 2)
+            y = parent.winfo_y() + (parent.winfo_height() // 2) - (dialog.winfo_height() // 2)
+            dialog.geometry(f"+{x}+{y}")
+        
+        result = [False]
+        
+        ttk.Label(dialog, text=message, wraplength=350, justify='left').pack(pady=20, padx=20)
+        
+        button_frame = ttk.Frame(dialog)
+        button_frame.pack(pady=10)
+        
+        def on_yes():
+            result[0] = True
+            dialog.destroy()
+        
+        def on_no():
+            result[0] = False
+            dialog.destroy()
+        
+        ttk.Button(button_frame, text="Yes", command=on_yes, width=10).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="No", command=on_no, width=10).pack(side='left', padx=5)
+        
+        dialog.focus_set()
+        dialog.wait_window()
+        
+        return result[0]
 
 
 class LibraryApp:
@@ -22,7 +137,10 @@ class LibraryApp:
         
         # Current book being viewed/edited
         self.current_book_id = None
-        self.cover_image = None  # Keep reference to prevent garbage collection
+        self.cover_image = None
+        
+        # Debounce timer for listbox selection
+        self.selection_timer = None
         
         # Create notebook for tabs
         self.notebook = ttk.Notebook(root)
@@ -77,7 +195,7 @@ class LibraryApp:
         self.year_entry = ttk.Entry(year_frame, width=10)
         self.year_entry.pack(side='left', padx=5)
         
-        # Series info (near title as requested)
+        # Series info
         series_frame = ttk.LabelFrame(left_frame, text="Series Information", padding=5)
         series_frame.pack(fill='x', pady=5)
         
@@ -91,12 +209,18 @@ class LibraryApp:
         self.series_number_entry = ttk.Entry(series_name_frame, width=5)
         self.series_number_entry.pack(side='left', padx=5)
         
-        # Author
+        # Author and Artist
         author_frame = ttk.Frame(left_frame)
         author_frame.pack(fill='x', pady=5)
         ttk.Label(author_frame, text="Author:").pack(anchor='w')
         self.author_entry = ttk.Entry(author_frame)
         self.author_entry.pack(fill='x')
+        
+        artist_frame = ttk.Frame(left_frame)
+        artist_frame.pack(fill='x', pady=5)
+        ttk.Label(artist_frame, text="Artist:").pack(anchor='w')
+        self.artist_entry = ttk.Entry(artist_frame)
+        self.artist_entry.pack(fill='x')
         
         # Publisher
         publisher_frame = ttk.Frame(left_frame)
@@ -105,7 +229,7 @@ class LibraryApp:
         self.publisher_entry = ttk.Entry(publisher_frame)
         self.publisher_entry.pack(fill='x')
         
-        # Format and Page Count (unobtrusive)
+        # Format and Page Count
         meta_frame = ttk.Frame(left_frame)
         meta_frame.pack(fill='x', pady=5)
         
@@ -126,7 +250,7 @@ class LibraryApp:
         self.notes_text = scrolledtext.ScrolledText(notes_frame, height=4)
         self.notes_text.pack(fill='both', expand=True)
         
-        # Save and Loan buttons
+        # Save and action buttons
         button_frame = ttk.Frame(left_frame)
         button_frame.pack(fill='x', pady=10)
         ttk.Button(button_frame, text="Save Changes", command=self.save_book).pack(side='left', padx=5)
@@ -137,9 +261,15 @@ class LibraryApp:
         right_frame = ttk.Frame(content_frame, width=350)
         right_frame.pack(side='right', fill='both', expand=True)
         
-        # Cover image
-        self.cover_label = ttk.Label(right_frame, text="No cover image")
-        self.cover_label.pack(pady=10)
+        # Cover image with upload button
+        cover_container = ttk.Frame(right_frame)
+        cover_container.pack(pady=10)
+        
+        self.cover_label = ttk.Label(cover_container, text="No cover image")
+        self.cover_label.pack()
+        
+        ttk.Button(cover_container, text="Upload Cover Image", 
+                   command=self.upload_cover_image).pack(pady=5)
         
         # Description
         desc_frame = ttk.LabelFrame(right_frame, text="Description", padding=5)
@@ -159,7 +289,7 @@ class LibraryApp:
         self.search_entry.pack(side='left', fill='x', expand=True, padx=5)
         self.search_entry.bind('<KeyRelease>', lambda e: self.refresh_library_list())
         
-        # Book list
+        # Book list with debounced selection
         list_scroll = ttk.Scrollbar(list_frame)
         list_scroll.pack(side='right', fill='y')
         
@@ -167,7 +297,7 @@ class LibraryApp:
         self.book_list.pack(side='left', fill='both', expand=True)
         list_scroll.config(command=self.book_list.yview)
         
-        self.book_list.bind('<<ListboxSelect>>', self.on_book_selected)
+        self.book_list.bind('<<ListboxSelect>>', self.on_book_selected_debounced)
     
     def create_search_tab(self):
         """Dedicated search tab with multiple criteria"""
@@ -206,6 +336,13 @@ class LibraryApp:
         self.search_author_entry = ttk.Entry(author_row)
         self.search_author_entry.pack(side='left', fill='x', expand=True, padx=5)
         
+        # Artist search
+        artist_row = ttk.Frame(criteria_frame)
+        artist_row.pack(fill='x', pady=5)
+        ttk.Label(artist_row, text="Artist:", width=12).pack(side='left')
+        self.search_artist_entry = ttk.Entry(artist_row)
+        self.search_artist_entry.pack(side='left', fill='x', expand=True, padx=5)
+        
         # Publisher search
         publisher_row = ttk.Frame(criteria_frame)
         publisher_row.pack(fill='x', pady=5)
@@ -236,7 +373,7 @@ class LibraryApp:
         h_scroll.pack(side='bottom', fill='x')
         
         # Treeview
-        columns = ('Title', 'Author', 'Series', 'Publisher', 'Year')
+        columns = ('Title', 'Author', 'Artist', 'Series', 'Publisher', 'Year')
         self.search_results_tree = ttk.Treeview(results_frame, columns=columns, show='tree headings',
                                                 yscrollcommand=v_scroll.set,
                                                 xscrollcommand=h_scroll.set)
@@ -248,16 +385,19 @@ class LibraryApp:
         self.search_results_tree.column('#0', width=50)
         
         self.search_results_tree.heading('Title', text='Title')
-        self.search_results_tree.column('Title', width=250)
+        self.search_results_tree.column('Title', width=200)
         
         self.search_results_tree.heading('Author', text='Author')
-        self.search_results_tree.column('Author', width=150)
+        self.search_results_tree.column('Author', width=130)
+        
+        self.search_results_tree.heading('Artist', text='Artist')
+        self.search_results_tree.column('Artist', width=130)
         
         self.search_results_tree.heading('Series', text='Series')
-        self.search_results_tree.column('Series', width=150)
+        self.search_results_tree.column('Series', width=130)
         
         self.search_results_tree.heading('Publisher', text='Publisher')
-        self.search_results_tree.column('Publisher', width=150)
+        self.search_results_tree.column('Publisher', width=130)
         
         self.search_results_tree.heading('Year', text='Year')
         self.search_results_tree.column('Year', width=60)
@@ -342,16 +482,60 @@ class LibraryApp:
         ttk.Button(button_frame, text="Refresh", 
                    command=self.refresh_overdue_list).pack(side='left', padx=5)
     
+    def upload_cover_image(self):
+        """Allow manual upload of cover image"""
+        if not self.current_book_id:
+            SilentDialog.showwarning("No Book Selected", 
+                                    "Please select or add a book before uploading a cover image",
+                                    self.root)
+            return
+        
+        # Open file picker
+        file_path = filedialog.askopenfilename(
+            parent=self.root,
+            title="Select Cover Image",
+            filetypes=[
+                ("Image files", "*.jpg *.jpeg *.png *.gif *.bmp"),
+                ("All files", "*.*")
+            ]
+        )
+        
+        if not file_path:
+            return
+        
+        try:
+            # Create covers directory if it doesn't exist
+            covers_dir = Path(__file__).parent / "covers"
+            covers_dir.mkdir(exist_ok=True)
+            
+            # Generate filename based on book ID
+            file_ext = Path(file_path).suffix
+            new_filename = f"manual_{self.current_book_id}{file_ext}"
+            new_path = covers_dir / new_filename
+            
+            # Copy image to covers directory
+            shutil.copy2(file_path, new_path)
+            
+            # Update database
+            database.update_book(self.current_book_id, cover_path=str(new_path))
+            
+            # Display the cover
+            self.display_cover(new_path)
+            
+            SilentDialog.showinfo("Success", "Cover image uploaded successfully!", self.root)
+            
+        except Exception as e:
+            SilentDialog.showerror("Error", f"Failed to upload cover image: {e}", self.root)
+    
     def lookup_isbn(self):
         """Look up book information by ISBN"""
         isbn = self.isbn_entry.get().strip()
         if not isbn:
-            messagebox.showwarning("No ISBN", "Please enter an ISBN")
+            SilentDialog.showwarning("No ISBN", "Please enter an ISBN", self.root)
             return
         
-        # Clear all fields first (including cover)
+        # Clear all fields first
         self.clear_form()
-        # Put the ISBN back
         self.isbn_entry.insert(0, isbn)
         
         # Show loading message
@@ -388,10 +572,11 @@ class LibraryApp:
                     if isbn_lookup.download_cover(result['cover_url'], cover_path):
                         self.display_cover(cover_path)
                 
-                messagebox.showinfo("Success", "Book information loaded! Please review and save.")
+                SilentDialog.showinfo("Success", "Book information loaded! Please review and save.", self.root)
             else:
-                messagebox.showwarning("Not Found", 
-                                       "ISBN not found in Open Library. You can still add the book manually.")
+                SilentDialog.showwarning("Not Found", 
+                                       "ISBN not found in Open Library. You can still add the book manually.",
+                                       self.root)
         finally:
             self.root.config(cursor="")
     
@@ -399,11 +584,10 @@ class LibraryApp:
         """Display a cover image"""
         try:
             img = Image.open(image_path)
-            # Resize to fit nicely (max 200x300)
             img.thumbnail((200, 300), Image.Resampling.LANCZOS)
             photo = ImageTk.PhotoImage(img)
             
-            self.cover_image = photo  # Keep reference
+            self.cover_image = photo
             self.cover_label.config(image=photo, text='')
         except Exception as e:
             print(f"Error displaying cover: {e}")
@@ -416,6 +600,7 @@ class LibraryApp:
         self.title_entry.delete(0, 'end')
         self.year_entry.delete(0, 'end')
         self.author_entry.delete(0, 'end')
+        self.artist_entry.delete(0, 'end')
         self.publisher_entry.delete(0, 'end')
         self.page_count_entry.delete(0, 'end')
         self.series_name_entry.delete(0, 'end')
@@ -432,13 +617,13 @@ class LibraryApp:
         title = self.title_entry.get().strip()
         
         if not title:
-            messagebox.showwarning("Missing Information", "Title is required")
+            SilentDialog.showwarning("Missing Information", "Title is required", self.root)
             return
         
         try:
-            # Get all field values
             year = self.year_entry.get().strip()
             author = self.author_entry.get().strip()
+            artist = self.artist_entry.get().strip()
             publisher = self.publisher_entry.get().strip()
             
             page_count = self.page_count_entry.get().strip()
@@ -466,6 +651,7 @@ class LibraryApp:
                 title=title,
                 year=year,
                 author=author,
+                artist=artist or None,
                 publisher=publisher,
                 page_count=page_count,
                 description=description,
@@ -476,28 +662,28 @@ class LibraryApp:
                 notes=notes
             )
             
-            messagebox.showinfo("Success", "Book added to library!")
+            SilentDialog.showinfo("Success", "Book added to library!", self.root)
             self.clear_form()
             self.refresh_library_list()
             
         except ValueError as e:
-            messagebox.showerror("Error", str(e))
+            SilentDialog.showerror("Error", str(e), self.root)
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to add book: {e}")
+            SilentDialog.showerror("Error", f"Failed to add book: {e}", self.root)
     
     def save_book(self):
         """Save changes to current book"""
         if not self.current_book_id:
-            messagebox.showwarning("No Book Selected", "Please select a book to update")
+            SilentDialog.showwarning("No Book Selected", "Please select a book to update", self.root)
             return
         
         try:
-            # Get all field values
             updates = {
                 'isbn': self.isbn_entry.get().strip() or None,
                 'title': self.title_entry.get().strip(),
                 'year': self.year_entry.get().strip(),
                 'author': self.author_entry.get().strip(),
+                'artist': self.artist_entry.get().strip() or None,
                 'publisher': self.publisher_entry.get().strip(),
                 'description': self.description_text.get('1.0', 'end-1c').strip(),
                 'series_name': self.series_name_entry.get().strip() or None,
@@ -511,46 +697,45 @@ class LibraryApp:
             series_number = self.series_number_entry.get().strip()
             updates['series_number'] = int(series_number) if series_number else None
             
-            # Update database
             database.update_book(self.current_book_id, **updates)
             
-            messagebox.showinfo("Success", "Book updated!")
+            SilentDialog.showinfo("Success", "Book updated!", self.root)
             self.refresh_library_list()
             
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to save changes: {e}")
+            SilentDialog.showerror("Error", f"Failed to save changes: {e}", self.root)
     
     def delete_book(self):
         """Delete the current book"""
         if not self.current_book_id:
-            messagebox.showwarning("No Book Selected", "Please select a book to delete")
+            SilentDialog.showwarning("No Book Selected", "Please select a book to delete", self.root)
             return
         
-        # Confirm deletion
         title = self.title_entry.get()
-        if not messagebox.askyesno("Confirm Delete", 
-                                   f"Are you sure you want to delete '{title}'?"):
+        if not SilentDialog.askyesno("Confirm Delete", 
+                                   f"Are you sure you want to delete '{title}'?",
+                                   self.root):
             return
         
         try:
             database.delete_book(self.current_book_id)
-            messagebox.showinfo("Success", "Book deleted")
+            SilentDialog.showinfo("Success", "Book deleted", self.root)
             self.clear_form()
             self.refresh_library_list()
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to delete book: {e}")
+            SilentDialog.showerror("Error", f"Failed to delete book: {e}", self.root)
     
     def loan_out_book(self):
         """Loan out the current book"""
         if not self.current_book_id:
-            messagebox.showwarning("No Book Selected", "Please select a book to loan out")
+            SilentDialog.showwarning("No Book Selected", "Please select a book to loan out", self.root)
             return
         
-        # Check if already on loan
         current_loan = database.get_current_loan(self.current_book_id)
         if current_loan:
-            messagebox.showwarning("Already On Loan", 
-                                   f"This book is currently loaned to {current_loan['borrower_name']}")
+            SilentDialog.showwarning("Already On Loan", 
+                                   f"This book is currently loaned to {current_loan['borrower_name']}",
+                                   self.root)
             return
         
         # Dialog for borrower name
@@ -568,20 +753,29 @@ class LibraryApp:
         def do_loan():
             borrower = borrower_entry.get().strip()
             if not borrower:
-                messagebox.showwarning("Missing Information", "Please enter borrower name")
+                SilentDialog.showwarning("Missing Information", "Please enter borrower name", dialog)
                 return
             
             try:
                 database.loan_book(self.current_book_id, borrower)
-                messagebox.showinfo("Success", f"Book loaned to {borrower}")
+                SilentDialog.showinfo("Success", f"Book loaned to {borrower}", self.root)
                 dialog.destroy()
                 self.refresh_loans_list()
                 self.refresh_overdue_list()
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to record loan: {e}")
+                SilentDialog.showerror("Error", f"Failed to record loan: {e}", dialog)
         
         ttk.Button(dialog, text="Loan Out", command=do_loan).pack(pady=10)
         borrower_entry.bind('<Return>', lambda e: do_loan())
+    
+    def on_book_selected_debounced(self, event):
+        """Debounced book selection handler to prevent juddering"""
+        # Cancel any existing timer
+        if self.selection_timer:
+            self.root.after_cancel(self.selection_timer)
+        
+        # Set new timer for 300ms delay
+        self.selection_timer = self.root.after(300, self.on_book_selected, event)
     
     def on_book_selected(self, event):
         """Handle book selection from list"""
@@ -589,11 +783,9 @@ class LibraryApp:
         if not selection:
             return
         
-        # Get book ID from selection
         index = selection[0]
         book_info = self.book_list.get(index)
         
-        # Extract book ID (format: "ID: Title by Author")
         try:
             book_id = int(book_info.split(':')[0])
             self.load_book(book_id)
@@ -621,6 +813,9 @@ class LibraryApp:
         
         self.author_entry.delete(0, 'end')
         self.author_entry.insert(0, book['author'] or '')
+        
+        self.artist_entry.delete(0, 'end')
+        self.artist_entry.insert(0, book.get('artist', '') or '')
         
         self.publisher_entry.delete(0, 'end')
         self.publisher_entry.insert(0, book['publisher'] or '')
@@ -655,7 +850,6 @@ class LibraryApp:
         """Refresh the library book list"""
         self.book_list.delete(0, 'end')
         
-        # Get search query
         query = self.search_entry.get().strip()
         
         if query:
@@ -677,8 +871,7 @@ class LibraryApp:
         loans = database.get_all_loans()
         
         for loan in loans:
-            # Format dates
-            loaned = loan['date_loaned'][:10]  # YYYY-MM-DD
+            loaned = loan['date_loaned'][:10]
             due = loan['date_due'][:10]
             
             self.loans_tree.insert('', 'end', text=str(loan['id']),
@@ -696,11 +889,9 @@ class LibraryApp:
         now = datetime.now()
         
         for loan in loans:
-            # Format dates
             loaned = loan['date_loaned'][:10]
             due = loan['date_due'][:10]
             
-            # Calculate days overdue
             due_date = datetime.fromisoformat(loan['date_due'])
             days_overdue = (now - due_date).days
             
@@ -713,58 +904,56 @@ class LibraryApp:
         """Mark selected loan as returned"""
         selection = self.loans_tree.selection()
         if not selection:
-            messagebox.showwarning("No Selection", "Please select a loan to return")
+            SilentDialog.showwarning("No Selection", "Please select a loan to return", self.root)
             return
         
         loan_id = int(self.loans_tree.item(selection[0])['text'])
         
         try:
             database.return_book(loan_id)
-            messagebox.showinfo("Success", "Book marked as returned")
+            SilentDialog.showinfo("Success", "Book marked as returned", self.root)
             self.refresh_loans_list()
             self.refresh_overdue_list()
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to return book: {e}")
+            SilentDialog.showerror("Error", f"Failed to return book: {e}", self.root)
     
     def return_selected_overdue(self):
         """Mark selected overdue loan as returned"""
         selection = self.overdue_tree.selection()
         if not selection:
-            messagebox.showwarning("No Selection", "Please select a loan to return")
+            SilentDialog.showwarning("No Selection", "Please select a loan to return", self.root)
             return
         
         loan_id = int(self.overdue_tree.item(selection[0])['text'])
         
         try:
             database.return_book(loan_id)
-            messagebox.showinfo("Success", "Book marked as returned")
+            SilentDialog.showinfo("Success", "Book marked as returned", self.root)
             self.refresh_loans_list()
             self.refresh_overdue_list()
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to return book: {e}")
+            SilentDialog.showerror("Error", f"Failed to return book: {e}", self.root)
     
     def do_advanced_search(self):
         """Perform advanced search with multiple criteria"""
-        # Get search criteria
         isbn = self.search_isbn_entry.get().strip()
         title = self.search_title_entry.get().strip()
         series = self.search_series_entry.get().strip()
         author = self.search_author_entry.get().strip()
+        artist = self.search_artist_entry.get().strip()
         publisher = self.search_publisher_entry.get().strip()
         
-        # Check if at least one criterion is provided
-        if not any([isbn, title, series, author, publisher]):
-            messagebox.showinfo("No Criteria", "Please enter at least one search criterion")
+        if not any([isbn, title, series, author, artist, publisher]):
+            SilentDialog.showinfo("No Criteria", "Please enter at least one search criterion", self.root)
             return
         
-        # Perform search
         results = database.advanced_search(isbn=isbn or None, 
                                           title=title or None,
                                           series=series or None, 
-                                          author=author or None, 
+                                          author=author or None,
+                                          artist=artist or None,
                                           publisher=publisher or None)
         
-        # Display results
         self.display_search_results(results)
     
     def clear_search_criteria(self):
@@ -773,9 +962,9 @@ class LibraryApp:
         self.search_title_entry.delete(0, 'end')
         self.search_series_entry.delete(0, 'end')
         self.search_author_entry.delete(0, 'end')
+        self.search_artist_entry.delete(0, 'end')
         self.search_publisher_entry.delete(0, 'end')
         
-        # Clear results
         for item in self.search_results_tree.get_children():
             self.search_results_tree.delete(item)
         
@@ -788,11 +977,9 @@ class LibraryApp:
     
     def display_search_results(self, results):
         """Display search results in the treeview"""
-        # Clear existing results
         for item in self.search_results_tree.get_children():
             self.search_results_tree.delete(item)
         
-        # Add new results
         for book in results:
             series_info = ''
             if book['series_name']:
@@ -803,11 +990,11 @@ class LibraryApp:
             self.search_results_tree.insert('', 'end', text=str(book['id']),
                                            values=(book['title'] or '',
                                                   book['author'] or '',
+                                                  book.get('artist', '') or '',
                                                   series_info,
                                                   book['publisher'] or '',
                                                   book['year'] or ''))
         
-        # Update label
         count = len(results)
         if count == 0:
             self.search_results_label.config(text="No books found matching criteria")
@@ -824,21 +1011,17 @@ class LibraryApp:
         
         book_id = int(self.search_results_tree.item(selection[0])['text'])
         self.load_book(book_id)
-        
-        # Switch to Library tab to show the loaded book
         self.notebook.select(0)
     
     def view_book_from_search(self):
         """Load selected book from search results via button"""
         selection = self.search_results_tree.selection()
         if not selection:
-            messagebox.showwarning("No Selection", "Please select a book to view")
+            SilentDialog.showwarning("No Selection", "Please select a book to view", self.root)
             return
         
         book_id = int(self.search_results_tree.item(selection[0])['text'])
         self.load_book(book_id)
-        
-        # Switch to Library tab to show the loaded book
         self.notebook.select(0)
 
 

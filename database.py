@@ -23,6 +23,7 @@ def init_database():
             title TEXT NOT NULL,
             year TEXT,
             author TEXT,
+            artist TEXT,
             publisher TEXT,
             page_count INTEGER,
             description TEXT,
@@ -34,6 +35,13 @@ def init_database():
             date_added TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    
+    # Add artist column to existing databases (migration)
+    try:
+        cursor.execute("ALTER TABLE books ADD COLUMN artist TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     
     # Loans table
     cursor.execute("""
@@ -52,7 +60,7 @@ def init_database():
     conn.close()
 
 
-def add_book(isbn, title, year, author, publisher, page_count=None, 
+def add_book(isbn, title, year, author, artist=None, publisher=None, page_count=None, 
              description=None, series_name=None, series_number=None,
              format_type='Book', cover_path=None, notes=None):
     """Add a new book to the database"""
@@ -61,11 +69,11 @@ def add_book(isbn, title, year, author, publisher, page_count=None,
     
     try:
         cursor.execute("""
-            INSERT INTO books (isbn, title, year, author, publisher, page_count,
+            INSERT INTO books (isbn, title, year, author, artist, publisher, page_count,
                              description, series_name, series_number, format, 
                              cover_path, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (isbn, title, year, author, publisher, page_count, description,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (isbn, title, year, author, artist, publisher, page_count, description,
               series_name, series_number, format_type, cover_path, notes))
         
         conn.commit()
@@ -125,7 +133,7 @@ def get_all_books():
 
 
 def search_books(query):
-    """Search books by title, author, or ISBN (quick search)"""
+    """Search books by title, author, artist, or ISBN (quick search)"""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -133,9 +141,9 @@ def search_books(query):
     search_pattern = f"%{query}%"
     cursor.execute("""
         SELECT * FROM books 
-        WHERE title LIKE ? OR author LIKE ? OR isbn LIKE ?
+        WHERE title LIKE ? OR author LIKE ? OR artist LIKE ? OR isbn LIKE ?
         ORDER BY title COLLATE NOCASE
-    """, (search_pattern, search_pattern, search_pattern))
+    """, (search_pattern, search_pattern, search_pattern, search_pattern))
     
     books = [dict(row) for row in cursor.fetchall()]
     conn.close()
@@ -143,7 +151,7 @@ def search_books(query):
     return books
 
 
-def advanced_search(isbn=None, title=None, series=None, author=None, publisher=None):
+def advanced_search(isbn=None, title=None, series=None, author=None, artist=None, publisher=None):
     """Advanced search with multiple criteria (case-insensitive, partial matching)"""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -168,6 +176,10 @@ def advanced_search(isbn=None, title=None, series=None, author=None, publisher=N
     if author:
         conditions.append("author LIKE ?")
         params.append(f"%{author}%")
+    
+    if artist:
+        conditions.append("artist LIKE ?")
+        params.append(f"%{artist}%")
     
     if publisher:
         conditions.append("publisher LIKE ?")

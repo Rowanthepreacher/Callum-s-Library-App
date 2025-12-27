@@ -49,7 +49,7 @@ You can then copy this single file to Callum - no Python installation required!
 
 2. **Click "Look Up"**: The app will fetch:
    - Title and publication year
-   - Author(s)
+   - Author(s) - note: artist must be added manually for comics
    - Publisher
    - Page count
    - Description
@@ -58,6 +58,7 @@ You can then copy this single file to Callum - no Python installation required!
 3. **Review & Edit**: 
    - All fields are editable! Fix any errors or add missing info
    - Add series information manually (e.g., "Harry Potter" series, book #1)
+   - For comics/graphic novels: Add artist name in the Artist field
 
 4. **Click "Add New Book"**: Saves to your library
 
@@ -101,6 +102,7 @@ The **"⚠ Overdue"** tab shows:
   - Title
   - Series name
   - Author
+  - Artist
   - Publisher
 - Case-insensitive and typo-tolerant (partial matches work)
 - Example: Searching "potter" in Title will find "Harry Potter"
@@ -136,11 +138,15 @@ The **"⚠ Overdue"** tab shows:
 
 ### Cover Images
 - Downloaded automatically during ISBN lookup
+- Can also upload your own images using "Upload Cover Image" button
 - Stored in `covers/` folder
+- Supports JPG, PNG, GIF, and BMP formats
 - Won't download twice for the same ISBN
 
 ### Comics & Graphic Novels
 - Use the Format dropdown to mark as "Comic" or "Graphic Novel"
+- ISBN lookup provides author info, but you'll need to add the artist manually
+- Separate Author (writer) and Artist fields available
 - ISBN lookup works for most modern comics
 - Older comics may need manual entry
 
